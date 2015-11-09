@@ -1,0 +1,112 @@
+buildscript {
+    ext {
+        springBootVersion = '1.3.0.BUILD-SNAPSHOT'
+    }
+    repositories {
+        mavenCentral()
+        maven { url "https://repo.spring.io/snapshot" }
+        maven { url "https://repo.spring.io/milestone" }
+
+    }
+    dependencies {
+        classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
+        classpath 'se.transmode.gradle:gradle-docker:1.2'
+    }
+}
+
+apply plugin: 'java'
+apply plugin: 'groovy'
+apply plugin: 'eclipse'
+apply plugin: 'idea'
+apply plugin: 'spring-boot'
+apply plugin: 'docker'
+
+jar {
+    baseName = 'bookpub'
+    version = '0.0.1-SNAPSHOT'
+}
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+    maven { url "https://repo.spring.io/snapshot" }
+    maven { url "https://repo.spring.io/milestone" }
+
+}
+
+// Need to use Jetty instead of Tomcat
+//configurations {
+//    compile.exclude module: "spring-boot-starter-tomcat"
+//}
+
+applicationDefaultJvmArgs = [
+    "-Xms128m", "-Xmx256m"
+    //, "-Dmy.config.value=Gradle"
+]
+
+springBoot {
+    classifier = 'exec'
+    embeddedLaunchScript = file('launch.script')
+    embeddedLaunchScriptProperties = ['jvm_options' : applicationDefaultJvmArgs.join(' ')]
+}
+
+//distDocker {
+//    tag "aantono/springbootcookbook"
+//    push false
+//    exposePort 8080
+//    exposePort 8443
+//    addFile file("${System.properties['user.home']}/.keystore"), "/root/"
+//}
+task distDocker(type: Docker, overwrite: true, dependsOn: bootRepackage) {
+    group = 'docker'
+    description = "Packs the project's JVM application as a Docker image."
+
+    inputs.files project.bootRepackage
+
+    doFirst {
+        tag "aantono/springbootcookbook"
+        push false
+        exposePort 8080
+        exposePort 8443
+        addFile file("${System.properties['user.home']}/.keystore"), "/root/"
+        applicationName = project.applicationName
+        addFile project.bootRepackage.outputs.files.singleFile
+
+        def executableName = "/" + project.bootRepackage.outputs.files.singleFile.name
+        entryPoint = ["$executableName"]
+    }
+}
+
+dependencies {
+    compile("org.springframework.boot:spring-boot-starter-data-jpa")
+    compile("org.springframework.boot:spring-boot-starter-jdbc")
+    compile("org.springframework.boot:spring-boot-starter-web")
+    compile("org.springframework.boot:spring-boot-starter-data-rest")
+    // compile("org.springframework.boot:spring-boot-starter-jetty") // Need to use Jetty instead of Tomcat
+    compile project(':db-count-starter')
+    compile("commons-configuration:commons-configuration:1.10")
+    compile("commons-codec:commons-codec:1.6")
+    compile("commons-jxpath:commons-jxpath:1.3")
+    compile("commons-collections:commons-collections:3.2.1")
+    runtime("com.h2database:h2")
+    runtime("mysql:mysql-connector-java")
+    testCompile("org.springframework.boot:spring-boot-starter-test")
+    testCompile("info.cukes:cucumber-spring:1.2.2")
+    testCompile("info.cukes:cucumber-java8:1.2.2")
+    testCompile("info.cukes:cucumber-junit:1.2.2")
+    testCompile('org.spockframework:spock-core:1.0-groovy-2.4')
+    testCompile('org.spockframework:spock-spring:1.0-groovy-2.4')
+    testRuntime("com.jayway.jsonpath:json-path")
+}
+
+eclipse {
+    classpath {
+         containers.remove('org.eclipse.jdt.launching.JRE_CONTAINER')
+         containers 'org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.8'
+    }
+}
+
+task wrapper(type: Wrapper) {
+    gradleVersion = '2.3'
+}
